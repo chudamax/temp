@@ -1,0 +1,18 @@
+$Name = 'server01'
+
+$root = [ADSI]'LDAP://RootDSE'
+$base = [ADSI]("LDAP://" + $root.defaultNamingContext)
+
+$ds = New-Object System.DirectoryServices.DirectorySearcher($base)
+$ds.Filter = "(&(objectCategory=computer)(|(cn=$Name)(name=$Name)(dNSHostName=$Name)(dNSHostName=$Name.*)))"
+
+'distinguishedName','dNSHostName','servicePrincipalName','pwdLastSet','lastLogonTimestamp' |
+  ForEach-Object { [void]$ds.PropertiesToLoad.Add($_) }
+
+$result = $ds.FindOne()
+
+if ($result) {
+    $result.Properties
+} else {
+    "Not found in current domain"
+}
