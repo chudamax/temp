@@ -1,3 +1,5 @@
+//[System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().FindAllGlobalCatalogs() | Select-Object Name
+
 $Name = 'SERVER01'
 
 $root = [ADSI]'LDAP://RootDSE'
