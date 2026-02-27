@@ -1,60 +1,59 @@
-//[System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest().FindAllGlobalCatalogs() | Select-Object Name
-
 $Name = 'SERVER01'
+
+$forest = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest()
+$gc = $forest.FindGlobalCatalog()
+$ds = $gc.GetDirectorySearcher()
 
 $root = [ADSI]'LDAP://RootDSE'
 $myDomainDN = [string]$root.defaultNamingContext
 
-$gc = [ADSI]'GC://'
-$ds = New-Object System.DirectoryServices.DirectorySearcher($gc)
 $ds.Filter = "(&(objectCategory=computer)(|(cn=$Name)(name=$Name)(dNSHostName=$Name)(dNSHostName=$Name.*)))"
+$ds.SearchScope = 'Subtree'
+$ds.PageSize = 1000
 
 @(
-    'cn',
-    'name',
-    'distinguishedName',
-    'dNSHostName',
-    'operatingSystem',
-    'operatingSystemVersion',
-    'whenCreated',
-    'lastLogonTimestamp',
-    'pwdLastSet'
+  'cn',
+  'name',
+  'distinguishedName',
+  'dNSHostName',
+  'operatingSystem',
+  'operatingSystemVersion',
+  'whenCreated',
+  'lastLogonTimestamp',
+  'pwdLastSet'
 ) | ForEach-Object {
-    [void]$ds.PropertiesToLoad.Add($_)
+  [void]$ds.PropertiesToLoad.Add($_)
 }
 
 $r = $ds.FindOne()
 
 if (-not $r) {
-    Write-Host "Not found in current forest"
-    return
+  Write-Host "Not found in current forest"
+  return
 }
 
 $p = $r.Properties
 $dn = [string]$p['distinguishedname'][0]
 
 if ($dn -like "*$myDomainDN") {
-    Write-Host "Location: Same domain"
+  Write-Host "Location: Same domain"
 } else {
-    Write-Host "Location: Same forest, different domain"
+  Write-Host "Location: Same forest, different domain"
 }
 
 function Convert-FileTime($value) {
-    if ($value -and [int64]$value -gt 0) {
-        [DateTime]::FromFileTimeUtc([int64]$value).ToLocalTime()
-    } else {
-        $null
-    }
+  if ($value -and [int64]$value -gt 0) {
+    [DateTime]::FromFileTimeUtc([int64]$value).ToLocalTime()
+  }
 }
 
 [PSCustomObject]@{
-    Name                  = if ($p['name']) { [string]$p['name'][0] } else { $null }
-    CN                    = if ($p['cn']) { [string]$p['cn'][0] } else { $null }
-    DNSHostName           = if ($p['dnshostname']) { [string]$p['dnshostname'][0] } else { $null }
-    DistinguishedName     = if ($p['distinguishedname']) { [string]$p['distinguishedname'][0] } else { $null }
-    OperatingSystem       = if ($p['operatingsystem']) { [string]$p['operatingsystem'][0] } else { $null }
-    OperatingSystemVer    = if ($p['operatingsystemversion']) { [string]$p['operatingsystemversion'][0] } else { $null }
-    WhenCreated           = if ($p['whencreated']) { [datetime]$p['whencreated'][0] } else { $null }
-    LastLogonTimestamp    = Convert-FileTime $p['lastlogontimestamp'][0]
-    PasswordLastSet       = Convert-FileTime $p['pwdlastset'][0]
+  Name               = if ($p['name']) { [string]$p['name'][0] }
+  DNSHostName        = if ($p['dnshostname']) { [string]$p['dnshostname'][0] }
+  DistinguishedName  = if ($p['distinguishedname']) { [string]$p['distinguishedname'][0] }
+  OperatingSystem    = if ($p['operatingsystem']) { [string]$p['operatingsystem'][0] }
+  OSVersion          = if ($p['operatingsystemversion']) { [string]$p['operatingsystemversion'][0] }
+  WhenCreated        = if ($p['whencreated']) { [datetime]$p['whencreated'][0] }
+  LastLogonTimestamp = Convert-FileTime $p['lastlogontimestamp'][0]
+  PasswordLastSet    = Convert-FileTime $p['pwdlastset'][0]
 } | Format-List
