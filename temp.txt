@@ -1,18 +1,58 @@
-$Name = 'server01'
+$Name = 'SERVER01'
 
 $root = [ADSI]'LDAP://RootDSE'
-$base = [ADSI]("LDAP://" + $root.defaultNamingContext)
+$myDomainDN = [string]$root.defaultNamingContext
 
-$ds = New-Object System.DirectoryServices.DirectorySearcher($base)
+$gc = [ADSI]'GC://'
+$ds = New-Object System.DirectoryServices.DirectorySearcher($gc)
 $ds.Filter = "(&(objectCategory=computer)(|(cn=$Name)(name=$Name)(dNSHostName=$Name)(dNSHostName=$Name.*)))"
 
-'distinguishedName','dNSHostName','servicePrincipalName','pwdLastSet','lastLogonTimestamp' |
-  ForEach-Object { [void]$ds.PropertiesToLoad.Add($_) }
-
-$result = $ds.FindOne()
-
-if ($result) {
-    $result.Properties
-} else {
-    "Not found in current domain"
+@(
+    'cn',
+    'name',
+    'distinguishedName',
+    'dNSHostName',
+    'operatingSystem',
+    'operatingSystemVersion',
+    'whenCreated',
+    'lastLogonTimestamp',
+    'pwdLastSet'
+) | ForEach-Object {
+    [void]$ds.PropertiesToLoad.Add($_)
 }
+
+$r = $ds.FindOne()
+
+if (-not $r) {
+    Write-Host "Not found in current forest"
+    return
+}
+
+$p = $r.Properties
+$dn = [string]$p['distinguishedname'][0]
+
+if ($dn -like "*$myDomainDN") {
+    Write-Host "Location: Same domain"
+} else {
+    Write-Host "Location: Same forest, different domain"
+}
+
+function Convert-FileTime($value) {
+    if ($value -and [int64]$value -gt 0) {
+        [DateTime]::FromFileTimeUtc([int64]$value).ToLocalTime()
+    } else {
+        $null
+    }
+}
+
+[PSCustomObject]@{
+    Name                  = if ($p['name']) { [string]$p['name'][0] } else { $null }
+    CN                    = if ($p['cn']) { [string]$p['cn'][0] } else { $null }
+    DNSHostName           = if ($p['dnshostname']) { [string]$p['dnshostname'][0] } else { $null }
+    DistinguishedName     = if ($p['distinguishedname']) { [string]$p['distinguishedname'][0] } else { $null }
+    OperatingSystem       = if ($p['operatingsystem']) { [string]$p['operatingsystem'][0] } else { $null }
+    OperatingSystemVer    = if ($p['operatingsystemversion']) { [string]$p['operatingsystemversion'][0] } else { $null }
+    WhenCreated           = if ($p['whencreated']) { [datetime]$p['whencreated'][0] } else { $null }
+    LastLogonTimestamp    = Convert-FileTime $p['lastlogontimestamp'][0]
+    PasswordLastSet       = Convert-FileTime $p['pwdlastset'][0]
+} | Format-List
